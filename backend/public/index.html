@@ -50,31 +50,46 @@
           </div>
 
           <section id="duel-tab" class="tab-content">
-            <div class="mode-switch" id="duel-mode-switch">
-              <button data-mode="AI" class="mode-btn active" id="duel-mode-ai">Duelos IA</button>
-              <button data-mode="REAL" class="mode-btn hidden" id="duel-mode-real">Personas registradas</button>
+            <div class="card" style="padding: 1rem; margin-bottom: 1rem;">
+              <h2 style="margin-top:0;">Duelos</h2>
+              <p class="message" style="margin-top:0;">Elige tu modo y empieza a jugar.</p>
+              <div class="mode-switch" id="duel-mode-switch" style="margin-top: 0.75rem;">
+                <button data-mode="AI" class="mode-btn active" id="duel-mode-ai">Contra IA</button>
+                <button data-mode="REAL" class="mode-btn" id="duel-mode-real">Contra jugadores</button>
+              </div>
             </div>
-            
-            <div id="duel-guest-view" class="fade-view">
-              <h3 style="margin-top:0;">Explora duelos de IA</h3>
-              <p class="message" style="margin-top:0;">Mira ejemplos de duelos generados por IA y elige tus favoritos.</p>
-              <div class="card" style="padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin:0 0 0.75rem;">Regístrate para participar en duelos con personas reales y aparecer en rankings.</p>
+
+            <div id="duel-ai-panel" class="fade-view card" style="padding: 1rem; margin-bottom: 1rem;">
+              <h3 style="margin-top:0;">Duelos contra IA</h3>
+              <p class="message" style="margin-top:0;">Acceso público. Puedes jugar inmediatamente.</p>
+              <div id="duel-ai-cta" class="hidden" style="margin-top: 0.75rem;">
+                <p style="margin:0 0 0.75rem;">Regístrate para guardar tus resultados y acceder al ranking.</p>
                 <button id="guest-cta-register" class="btn primary">Crear cuenta</button>
                 <button id="guest-cta-login" class="btn ghost" style="margin-left: 0.5rem;">Iniciar sesión</button>
               </div>
             </div>
 
-            <div id="duel-user-view" class="fade-view hidden">
-              <div class="card" style="padding: 1rem; margin-bottom: 1rem;">
-                <h3 style="margin-top:0;">Tu participación</h3>
-                <p class="message" style="margin-top:0;">Tus fotos subidas participan en duelos y aparecen en rankings cuando están activas.</p>
-                <div id="my-duel-profile" class="my-photos-grid" style="margin-top: 0.5rem;"></div>
+            <div id="duel-real-panel" class="fade-view card hidden" style="padding: 1rem; margin-bottom: 1rem;">
+              <h3 style="margin-top:0;">Duelos reales entre usuarios</h3>
+              <p class="message" style="margin-top:0;">Exclusivo para usuarios registrados.</p>
+              <div id="duel-real-locked" class="hidden" style="margin-top: 0.75rem;">
+                <p style="margin:0 0 0.75rem;">Inicia sesión para desafiar a otros jugadores y registrar tus resultados.</p>
+                <button id="real-cta-login" class="btn primary">Iniciar sesión</button>
+                <button id="real-cta-register" class="btn ghost" style="margin-left: 0.5rem;">Crear cuenta</button>
               </div>
 
-              <div class="card" style="padding: 1rem; margin-bottom: 1rem;">
-                <h3 style="margin-top:0;">Ranking destacado</h3>
-                <ul id="duel-rankings-list" class="ranking-list" style="margin-top: 0.75rem;"></ul>
+              <div id="duel-real-unlocked" class="hidden" style="margin-top: 0.75rem;">
+                <div class="card" style="padding: 0.75rem; margin-bottom: 0.75rem;">
+                  <div style="display:flex; align-items:center; justify-content: space-between;">
+                    <strong>Desafiar a otros jugadores</strong>
+                    <button id="open-rankings" class="btn small ghost">Ver ranking</button>
+                  </div>
+                  <ul id="challenge-list" class="ranking-list" style="margin-top: 0.75rem;"></ul>
+                </div>
+                <div class="card" style="padding: 0.75rem;">
+                  <strong>Ranking de duelos (top)</strong>
+                  <ul id="duel-rankings-list" class="ranking-list" style="margin-top: 0.75rem;"></ul>
+                </div>
               </div>
             </div>
 

@@ -3,6 +3,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs/promises";
 import morgan from "morgan";
 import { initDb } from "./db/index.js";
 import facesRouter from "./routes/faces.js";
@@ -43,10 +44,8 @@ app.use("/api/votes", voteLimiter);
 const uploadsDir = path.join(__dirname, "uploads");
 const publicDir = path.join(__dirname, "..", "public");
 
-app.use("/uploads", (req, res, next) => {
-  console.log(`[Static] Request for upload: ${req.url}`);
-  next();
-}, express.static(uploadsDir));
+const uploadsStaticDir = process.env.UPLOADS_DIR || uploadsDir;
+app.use("/uploads", express.static(uploadsStaticDir));
 app.use(express.static(publicDir));
 
 app.use("/api/faces", facesRouter);
@@ -69,6 +68,8 @@ const port = process.env.PORT || 3000;
 
 // Inicializar DB y arrancar servidor
 initDb().then(() => {
+  return fs.mkdir(uploadsStaticDir, { recursive: true });
+}).then(() => {
   app.listen(port, () => {
     process.stdout.write(`Servidor iniciado en http://localhost:${port}\n`);
   });

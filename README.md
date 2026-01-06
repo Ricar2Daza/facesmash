@@ -123,6 +123,33 @@ Variables de entorno (opcional):
 - `PORT`: puerto del servidor (por defecto 3000).
 - `DB_PATH`: ruta del archivo SQLite (por defecto `./data.sqlite`).
 - `JWT_SECRET`: secreto para firmar JWT (obligatorio en despliegue).
+- `UPLOADS_DIR`: carpeta donde se guardan las imágenes subidas (por defecto `./src/uploads`).
+
+## 8. Despliegue recomendado
+
+Este proyecto guarda datos en disco (SQLite) y archivos subidos (uploads). Por eso, el despliegue recomendado es en un servicio con disco persistente (por ejemplo Render/Railway/Fly.io/VPS).
+
+### Render (simple)
+
+1. Crea un **Web Service** desde el repo `Ricar2Daza/facesmash`.
+2. Configura:
+   - Root directory: `backend`
+   - Build command: `npm install`
+   - Start command: `npm start`
+3. Crea un **Disk** persistente (por ejemplo montado en `/var/data`).
+4. Variables de entorno recomendadas:
+   - `JWT_SECRET`: un valor seguro (obligatorio)
+   - `DB_PATH=/var/data/data.sqlite`
+   - `UPLOADS_DIR=/var/data/uploads`
+
+### Vercel
+
+Vercel es ideal para frontend estático y funciones serverless. En este proyecto, el backend usa SQLite y subidas a disco, por lo que Vercel no es el objetivo recomendado para el backend.
+
+Si quieres usar Vercel, la ruta práctica es:
+
+- Desplegar el backend en Render/Railway/Fly.io con disco persistente.
+- Mantener el frontend en el mismo backend (como ahora) o mover el frontend a Vercel apuntando a la URL del backend.
 
 ## 5. Modelo de datos
 

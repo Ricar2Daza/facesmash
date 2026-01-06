@@ -163,6 +163,11 @@ body {
   border-color: rgba(59, 130, 246, 0.9);
 }
 
+.mode-btn.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .duel-area {
   display: grid;
   grid-template-columns: 1fr;

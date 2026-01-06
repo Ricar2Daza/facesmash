@@ -3,13 +3,15 @@ import multer from "multer";
 import sharp from "sharp";
 import crypto from "crypto";
 import fs from "fs/promises";
+import path from "path";
 import { query, run, get } from "../db/index.js";
 import { validateUploadPayload, validateImageFile } from "../validation/validators.js";
 import { authenticateUser, authenticateUserOptional } from "./auth.js";
 import { getUserVisibilityJoinAndCondition } from "../lib/accountFilters.js";
 
 const router = express.Router();
-const upload = multer({ dest: 'src/uploads/' });
+const uploadDest = process.env.UPLOADS_DIR || path.join(process.cwd(), "src", "uploads");
+const upload = multer({ dest: uploadDest });
 
 router.get('/duel', authenticateUserOptional, async (req, res) => {
   const category = (req.query.category || 'AI').toUpperCase();
