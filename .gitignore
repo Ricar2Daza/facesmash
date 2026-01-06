@@ -1,0 +1,18 @@
+**/node_modules/
+**/.DS_Store
+**/Thumbs.db
+**/*.log
+
+# SQLite / local data
+backend/data.sqlite
+backend/data.sqlite-journal
+
+# Uploads (runtime files)
+backend/src/uploads/*
+!backend/src/uploads/.gitkeep
+
+# Env files
+**/.env
+**/.env.*
+!**/.env.example
+

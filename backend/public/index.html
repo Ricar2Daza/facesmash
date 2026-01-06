@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Face Preference</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="app-header">
+        <h1>Face Preference</h1>
+        <div id="user-status" class="user-status">
+          <span id="username-display" class="hidden"></span>
+          <div id="auth-buttons">
+            <button id="login-btn" class="btn small ghost">Iniciar Sesión</button>
+            <button id="register-header-btn" class="btn small primary">Registrarse</button>
+          </div>
+          <button id="logout-btn" class="btn small ghost hidden">Cerrar Sesión</button>
+        </div>
+      </header>
+      <main class="app-main">
+        <section id="consent-section" class="card">
+          <h2>Consentimiento informado</h2>
+          <p>
+            Este sitio muestra rostros generados por IA y rostros de personas reales que dieron su consentimiento informado para aparecer en rankings públicos.
+          </p>
+          <ul class="consent-list">
+            <li>Solo se muestra tu rostro si subes una imagen y aceptas el consentimiento.</li>
+            <li>Puedes retirar tu consentimiento más adelante usando un token privado.</li>
+            <li>No se usan expresiones negativas ni lenguaje humillante, solo preferencias.</li>
+          </ul>
+          <label class="checkbox">
+            <input type="checkbox" id="consent-checkbox" />
+            <span>He leído y entiendo el propósito del sistema.</span>
+          </label>
+          <button id="accept-consent" class="btn primary" disabled>
+            Aceptar y continuar
+          </button>
+        </section>
+
+        <section id="main-section" class="hidden">
+          <div class="tabs">
+            <button data-tab="duel" class="tab active">Duelo</button>
+            <button data-tab="upload" class="tab">Subir rostro</button>
+            <button data-tab="my-photos" class="tab hidden" id="my-photos-tab-btn">Mis Fotos</button>
+            <button data-tab="rankings" class="tab">Rankings</button>
+            <button data-tab="revoke" class="tab">Revocar consentimiento</button>
+            <button data-tab="admin" class="tab">Admin</button>
+          </div>
+
+          <section id="duel-tab" class="tab-content">
+            <div class="mode-switch" id="duel-mode-switch">
+              <button data-mode="AI" class="mode-btn active" id="duel-mode-ai">Duelos IA</button>
+              <button data-mode="REAL" class="mode-btn hidden" id="duel-mode-real">Personas registradas</button>
+            </div>
+            
+            <div id="duel-guest-view" class="fade-view">
+              <h3 style="margin-top:0;">Explora duelos de IA</h3>
+              <p class="message" style="margin-top:0;">Mira ejemplos de duelos generados por IA y elige tus favoritos.</p>
+              <div class="card" style="padding: 1rem; margin-bottom: 1rem;">
+                <p style="margin:0 0 0.75rem;">Regístrate para participar en duelos con personas reales y aparecer en rankings.</p>
+                <button id="guest-cta-register" class="btn primary">Crear cuenta</button>
+                <button id="guest-cta-login" class="btn ghost" style="margin-left: 0.5rem;">Iniciar sesión</button>
+              </div>
+            </div>
+
+            <div id="duel-user-view" class="fade-view hidden">
+              <div class="card" style="padding: 1rem; margin-bottom: 1rem;">
+                <h3 style="margin-top:0;">Tu participación</h3>
+                <p class="message" style="margin-top:0;">Tus fotos subidas participan en duelos y aparecen en rankings cuando están activas.</p>
+                <div id="my-duel-profile" class="my-photos-grid" style="margin-top: 0.5rem;"></div>
+              </div>
+
+              <div class="card" style="padding: 1rem; margin-bottom: 1rem;">
+                <h3 style="margin-top:0;">Ranking destacado</h3>
+                <ul id="duel-rankings-list" class="ranking-list" style="margin-top: 0.75rem;"></ul>
+              </div>
+            </div>
+
+            <div class="filters">
+              <label>
+                <span>Género:</span>
+                <select id="duel-gender">
+                  <option value="male">Hombres</option>
+                  <option value="female">Mujeres</option>
+                  <option value="" id="opt-all-genders">Todos</option>
+                </select>
+              </label>
+            </div>
+            <div id="duel-area" class="duel-area">
+              <div class="face-card" data-side="A">
+                <div class="face-image-wrapper">
+                  <img id="face-a-img" alt="Rostro A" />
+                </div>
+                <button id="vote-a" class="btn secondary">Prefiero este</button>
+              </div>
+              <div class="face-card" data-side="B">
+                <div class="face-image-wrapper">
+                  <img id="face-b-img" alt="Rostro B" />
+                </div>
+                <button id="vote-b" class="btn secondary">Prefiero este</button>
+              </div>
+            </div>
+            <button id="skip-duel" class="btn ghost">Saltar duelo</button>
+            <p id="duel-message" class="message"></p>
+          </section>
+
+          <section id="upload-tab" class="tab-content hidden">
+            <h2>Subir rostro</h2>
+            <p>Puedes subir una imagen tuya o una imagen generada por IA.</p>
+            <form id="upload-form">
+              <label class="field">
+                <span>Tipo de rostro</span>
+                <select name="type" id="upload-type">
+                  <option value="REAL">Persona real</option>
+                  <option value="AI">Imagen generada por IA</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Género</span>
+                <select name="gender" id="upload-gender" required>
+                  <option value="male">Masculino</option>
+                  <option value="female">Femenino</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Nombre para mostrar (opcional)</span>
+                <input type="text" name="displayName" maxlength="50" />
+              </label>
+              <label class="field">
+                <span>Imagen</span>
+                <input type="file" name="image" id="upload-file-input" accept="image/*" capture="camera" required />
+              </label>
+              
+              <div id="upload-preview-container" class="hidden" style="margin-bottom: 1rem; text-align: center;">
+                <img id="upload-preview" src="" alt="Vista previa" style="max-width: 200px; max-height: 200px; border-radius: 0.5rem; border: 2px solid #334155;" />
+              </div>
+
+              <div id="real-consent-block">
+                <label class="checkbox">
+                  <input type="checkbox" name="confirmOwnership" />
+                  <span>Confirmo que soy la persona que aparece en la imagen.</span>
+                </label>
+                <label class="checkbox">
+                  <input type="checkbox" name="acceptPublicRanking" />
+                  <span>Acepto aparecer en rankings públicos de este sitio.</span>
+                </label>
+                <label class="checkbox">
+                  <input type="checkbox" name="acceptTerms" />
+                  <span>He leído y acepto el consentimiento informado.</span>
+                </label>
+              </div>
+              <div id="ai-consent-block" class="hidden">
+                <label class="checkbox">
+                  <input type="checkbox" name="confirmAiSource" />
+                  <span>Confirmo que la imagen fue generada por IA y no corresponde a una persona real.</span>
+                </label>
+              </div>
+              <button type="submit" class="btn primary">Subir imagen</button>
+            </form>
+            <div id="upload-result" class="message"></div>
+          </section>
+
+          <section id="my-photos-tab" class="tab-content hidden">
+            <h2>Mis Fotos</h2>
+            <p>Aquí puedes ver y administrar las fotos que has subido.</p>
+            <div id="my-photos-list" class="my-photos-grid">
+               <!-- JS will populate photos here -->
+            </div>
+            <p id="my-photos-msg" class="message"></p>
+          </section>
+
+          <section id="rankings-tab" class="tab-content hidden">
+            <h2>Rankings públicos</h2>
+            <div class="mode-switch">
+              <button data-mode="AI" class="mode-btn active" data-rankings="true">Rostros IA</button>
+              <button data-mode="REAL" class="mode-btn" data-rankings="true">Personas registradas</button>
+              <button data-mode="ALL" class="mode-btn" data-rankings="true">Mixto</button>
+            </div>
+            <ul id="rankings-list" class="ranking-list"></ul>
+          </section>
+
+          <section id="revoke-tab" class="tab-content hidden">
+            <h2>Revocar consentimiento</h2>
+            <p>
+              Si subiste un rostro, se te entregó un token privado. Puedes pegar ese token aquí para ocultar tu rostro de los rankings y de los duelos.
+            </p>
+            <form id="revoke-form">
+              <label class="field">
+                <span>Token de revocación</span>
+                <textarea id="revoke-token" required rows="3"></textarea>
+              </label>
+              <button type="submit" class="btn danger">Revocar consentimiento</button>
+            </form>
+            <div id="revoke-result" class="message"></div>
+          </section>
+
+          <section id="auth-tab" class="tab-content hidden">
+            <div id="auth-forms">
+              <div id="login-view">
+                <h2>Iniciar Sesión</h2>
+                <form id="user-login-form">
+                  <label class="field">
+                    <span>Usuario</span>
+                    <input type="text" id="user-login-username" required />
+                  </label>
+                  <label class="field">
+                    <span>Contraseña</span>
+                    <input type="password" id="user-login-password" required />
+                  </label>
+                  <label class="checkbox">
+                    <input type="checkbox" id="remember-me" />
+                    <span>Mantener sesión iniciada</span>
+                  </label>
+                  <button type="submit" class="btn primary">Entrar</button>
+                  <p>¿No tienes cuenta? <a href="#" id="go-to-register">Regístrate</a></p>
+                  <p><a href="#" id="go-to-forgot" style="font-size: 0.9rem;">¿Olvidaste tu contraseña?</a></p>
+                </form>
+              </div>
+              <div id="register-view" class="hidden">
+                <h2>Registrarse</h2>
+                <form id="user-register-form">
+                  <label class="field">
+                    <span>Usuario</span>
+                    <input type="text" id="user-reg-username" required />
+                  </label>
+                  <label class="field">
+                    <span>Email</span>
+                    <input type="email" id="user-reg-email" required />
+                  </label>
+                  <label class="field">
+                    <span>Contraseña</span>
+                    <input type="password" id="user-reg-password" required />
+                  </label>
+                  <label class="field">
+                    <span id="captcha-label">¿Cuánto es 3 + 4?</span>
+                    <input type="number" id="user-reg-captcha" required />
+                  </label>
+                  <button type="submit" class="btn primary">Crear cuenta</button>
+                  <p>¿Ya tienes cuenta? <a href="#" id="go-to-login">Inicia sesión</a></p>
+                </form>
+              </div>
+              <div id="forgot-password-view" class="hidden">
+                <h2>Recuperar Contraseña</h2>
+                <p>Ingresa tu email para recibir un enlace de recuperación.</p>
+                <form id="forgot-password-form">
+                  <label class="field">
+                    <span>Email</span>
+                    <input type="email" id="forgot-email" required />
+                  </label>
+                  <button type="submit" class="btn primary">Enviar enlace</button>
+                  <p><a href="#" id="back-to-login">Volver a iniciar sesión</a></p>
+                </form>
+                <div id="forgot-message" class="message"></div>
+              </div>
+              <div id="reset-password-view" class="hidden">
+                <h2>Restablecer Contraseña</h2>
+                <form id="reset-password-form">
+                  <input type="hidden" id="reset-token" />
+                  <label class="field">
+                    <span>Nueva Contraseña</span>
+                    <input type="password" id="reset-new-password" required />
+                  </label>
+                  <button type="submit" class="btn primary">Guardar nueva contraseña</button>
+                </form>
+                <div id="reset-message" class="message"></div>
+              </div>
+            </div>
+          </section>
+
+          <section id="admin-tab" class="tab-content hidden">
+            <h2>Panel de Administración</h2>
+            <div id="admin-login-view">
+               <form id="admin-login-form">
+                  <label class="field">
+                    <span>Usuario</span>
+                    <input type="text" id="admin-user" required />
+                  </label>
+                  <label class="field">
+                    <span>Contraseña</span>
+                    <input type="password" id="admin-pass" required />
+                  </label>
+                  <button type="submit" class="btn primary">Ingresar</button>
+               </form>
+               <p id="admin-login-msg" class="message"></p>
+            </div>
+            <div id="admin-dashboard-view" class="hidden">
+               <button id="admin-logout" class="btn ghost">Cerrar Sesión</button>
+               <h3>Reportes Recientes</h3>
+               <button id="refresh-reports" class="btn secondary">Refrescar</button>
+               <div id="reports-list" class="reports-list"></div>
+
+               <h3 style="margin-top:1.5rem;">Auditoría de Duelos</h3>
+               <button id="refresh-duels" class="btn secondary">Refrescar duelos</button>
+               <div id="duels-list" class="reports-list"></div>
+            </div>
+          </section>
+        </section>
+      </main>
+      <footer class="app-footer">
+        <button id="report-button" class="btn link">Reportar un rostro</button>
+      </footer>
+
+      <dialog id="report-dialog">
+        <form method="dialog" id="report-form" class="card">
+          <h2>Reportar rostro</h2>
+          <p>Este reporte se usa para moderar contenido inapropiado o abusivo.</p>
+          <label class="field">
+            <span>ID del rostro</span>
+            <input type="number" id="report-face-id" required />
+          </label>
+          <label class="field">
+            <span>Motivo (opcional)</span>
+            <textarea id="report-reason" rows="3"></textarea>
+          </label>
+          <div class="dialog-actions">
+            <button type="submit" class="btn primary">Enviar reporte</button>
+            <button type="button" id="close-report" class="btn ghost">Cerrar</button>
+          </div>
+          <div id="report-result" class="message"></div>
+        </form>
+      </dialog>
+    </div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
