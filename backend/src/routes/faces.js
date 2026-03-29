@@ -13,6 +13,12 @@ const router = express.Router();
 const uploadDest = process.env.UPLOADS_DIR || path.join(process.cwd(), "src", "uploads");
 const upload = multer({ dest: uploadDest });
 
+function randomIntInclusive(min, max) {
+  const a = Math.ceil(min);
+  const b = Math.floor(max);
+  return Math.floor(Math.random() * (b - a + 1)) + a;
+}
+
 router.get('/duel', authenticateUserOptional, async (req, res) => {
   const category = (req.query.category || 'AI').toUpperCase();
   const gender = req.query.gender; // 'male', 'female', or undefined (ALL)
@@ -33,33 +39,210 @@ router.get('/duel', authenticateUserOptional, async (req, res) => {
     }
 
     const { join, condition } = getUserVisibilityJoinAndCondition('f');
-    let sql = `
-      SELECT f.id, f.type, f.image_path, f.display_name, f.elo_rating, f.gender
-      FROM faces f
-      ${join}
-      WHERE f.is_public = 1 
-        AND f.consent_revoked_at IS NULL
-        AND ${condition}
+    let whereSqlBase = `
+      f.is_public = 1
+      AND f.consent_revoked_at IS NULL
+      AND ${condition}
+      AND f.type = ?
     `;
-    const params = [];
+    const whereParamsBase = [category];
 
-    sql += ` AND f.type = ?`;
-    params.push(category);
-
-    if (gender && ['male', 'female'].includes(gender)) {
-      sql += ` AND f.gender = ?`;
-      params.push(gender);
+    const effectiveGender = gender && ['male', 'female'].includes(gender) ? gender : null;
+    if (effectiveGender) {
+      whereSqlBase += ` AND f.gender = ?`;
+      whereParamsBase.push(effectiveGender);
     }
 
-    sql += ` ORDER BY RANDOM() LIMIT 2`;
+    if (category === 'REAL') {
+      whereSqlBase += ` AND f.uploader_id IS NOT NULL AND f.uploader_id != ?`;
+      whereParamsBase.push(req.userId);
+    }
 
-    const rows = await query(sql, params);
+    const recentRows = category === 'REAL'
+      ? await query(
+          `
+            SELECT face_a_id, face_b_id
+            FROM duel_history
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT 10
+          `,
+          [req.userId]
+        )
+      : [];
 
-    if (rows.length < 2) {
+    const lastPair = recentRows[0] || null;
+    const hardExcludeFaceIds = new Set();
+    if (lastPair) {
+      hardExcludeFaceIds.add(lastPair.face_a_id);
+      hardExcludeFaceIds.add(lastPair.face_b_id);
+    }
+    const softExcludeFaceIds = new Set();
+    recentRows.forEach(r => {
+      softExcludeFaceIds.add(r.face_a_id);
+      softExcludeFaceIds.add(r.face_b_id);
+    });
+    const recentPairs = new Set(recentRows.map(r => {
+      const a = Number(r.face_a_id);
+      const b = Number(r.face_b_id);
+      return a < b ? `${a}-${b}` : `${b}-${a}`;
+    }));
+
+    const statsRow = await get(
+      `
+        SELECT COUNT(*) as cnt
+        FROM faces f
+        ${join}
+        WHERE ${whereSqlBase}
+      `,
+      whereParamsBase
+    );
+    const totalCnt = Number(statsRow?.cnt || 0);
+
+    if (totalCnt < 2) {
+      if (category === 'REAL') {
+        return res.status(404).json({ error: 'No hay suficientes fotos reales de otros usuarios para iniciar un duelo.' });
+      }
       return res.status(404).json({ error: 'No hay suficientes rostros disponibles para un duelo con estos filtros.' });
     }
 
-    const faces = rows.map(f => ({
+    const buildNotIn = (field, values) => {
+      const arr = Array.from(values).filter(v => Number.isInteger(Number(v)));
+      if (!arr.length) return { sql: '', params: [] };
+      const placeholders = arr.map(() => '?').join(', ');
+      return { sql: ` AND ${field} NOT IN (${placeholders})`, params: arr };
+    };
+
+    const pickByOffset = async ({ excludeFaceIds, excludeUploaderIds }) => {
+      const excludeFaces = buildNotIn('f.id', excludeFaceIds);
+      const excludeUploaders = buildNotIn('f.uploader_id', excludeUploaderIds);
+
+      const cntRow = await get(
+        `
+          SELECT COUNT(*) as cnt
+          FROM faces f
+          ${join}
+          WHERE ${whereSqlBase}
+          ${excludeFaces.sql}
+          ${excludeUploaders.sql}
+        `,
+        [...whereParamsBase, ...excludeFaces.params, ...excludeUploaders.params]
+      );
+      const cnt = Number(cntRow?.cnt || 0);
+      if (cnt <= 0) return null;
+
+      const offset = randomIntInclusive(0, cnt - 1);
+      return get(
+        `
+          SELECT f.id, f.type, f.image_path, f.display_name, f.elo_rating, f.gender, f.uploader_id
+          FROM faces f
+          ${join}
+          WHERE ${whereSqlBase}
+          ${excludeFaces.sql}
+          ${excludeUploaders.sql}
+          ORDER BY f.id
+          LIMIT 1 OFFSET ?
+        `,
+        [...whereParamsBase, ...excludeFaces.params, ...excludeUploaders.params, offset]
+      );
+    };
+
+    const pickRandomFace = async ({ excludeFaceIds, excludeUploaderIds }) => {
+      if (totalCnt <= 5000) {
+        return pickByOffset({ excludeFaceIds, excludeUploaderIds });
+      }
+
+      const minMax = await get(
+        `
+          SELECT MIN(f.id) as minId, MAX(f.id) as maxId
+          FROM faces f
+          ${join}
+          WHERE ${whereSqlBase}
+        `,
+        whereParamsBase
+      );
+      const minId = Number(minMax?.minId || 0);
+      const maxId = Number(minMax?.maxId || 0);
+      if (!minId || !maxId) return null;
+
+      const excludeFaces = buildNotIn('f.id', excludeFaceIds);
+      const excludeUploaders = buildNotIn('f.uploader_id', excludeUploaderIds);
+      const target = randomIntInclusive(minId, maxId);
+
+      const row = await get(
+        `
+          SELECT f.id, f.type, f.image_path, f.display_name, f.elo_rating, f.gender, f.uploader_id
+          FROM faces f
+          ${join}
+          WHERE ${whereSqlBase}
+          ${excludeFaces.sql}
+          ${excludeUploaders.sql}
+          AND f.id >= ?
+          ORDER BY f.id
+          LIMIT 1
+        `,
+        [...whereParamsBase, ...excludeFaces.params, ...excludeUploaders.params, target]
+      );
+      if (row) return row;
+      return get(
+        `
+          SELECT f.id, f.type, f.image_path, f.display_name, f.elo_rating, f.gender, f.uploader_id
+          FROM faces f
+          ${join}
+          WHERE ${whereSqlBase}
+          ${excludeFaces.sql}
+          ${excludeUploaders.sql}
+          AND f.id < ?
+          ORDER BY f.id
+          LIMIT 1
+        `,
+        [...whereParamsBase, ...excludeFaces.params, ...excludeUploaders.params, target]
+      );
+    };
+
+    const attemptPickPair = async ({ excludeFaces, requireDifferentUploader }) => {
+      const faceA = await pickRandomFace({ excludeFaceIds: excludeFaces, excludeUploaderIds: new Set() });
+      if (!faceA) return null;
+
+      const uploaderExcludes = new Set();
+      if (requireDifferentUploader && faceA.uploader_id) uploaderExcludes.add(faceA.uploader_id);
+
+      for (let i = 0; i < 20; i++) {
+        const candidateB = await pickRandomFace({
+          excludeFaceIds: new Set([...excludeFaces, faceA.id]),
+          excludeUploaderIds: uploaderExcludes
+        });
+        if (!candidateB) break;
+        if (candidateB.id === faceA.id) continue;
+        if (requireDifferentUploader && faceA.uploader_id && candidateB.uploader_id && candidateB.uploader_id === faceA.uploader_id) {
+          continue;
+        }
+        const key = faceA.id < candidateB.id ? `${faceA.id}-${candidateB.id}` : `${candidateB.id}-${faceA.id}`;
+        if (category === 'REAL' && recentPairs.has(key)) continue;
+        return [faceA, candidateB];
+      }
+
+      return null;
+    };
+
+    let pair =
+      await attemptPickPair({ excludeFaces: hardExcludeFaceIds, requireDifferentUploader: category === 'REAL' }) ||
+      await attemptPickPair({ excludeFaces: softExcludeFaceIds, requireDifferentUploader: category === 'REAL' }) ||
+      await attemptPickPair({ excludeFaces: new Set(), requireDifferentUploader: category === 'REAL' }) ||
+      await attemptPickPair({ excludeFaces: new Set(), requireDifferentUploader: false });
+
+    if (!pair || pair.length < 2 || pair[0].id === pair[1].id) {
+      return res.status(404).json({ error: 'No hay suficientes rostros disponibles para un duelo con estos filtros.' });
+    }
+
+    if (category === 'REAL') {
+      await run(
+        `INSERT INTO duel_history (user_id, category, gender, face_a_id, face_b_id) VALUES (?, ?, ?, ?, ?)`,
+        [req.userId, 'REAL', effectiveGender, pair[0].id, pair[1].id]
+      );
+    }
+
+    const faces = pair.map(f => ({
       id: f.id,
       type: f.type,
       imagePath: f.image_path,
@@ -69,7 +252,7 @@ router.get('/duel', authenticateUserOptional, async (req, res) => {
     }));
     res.json({ faces });
   } catch (err) {
-    console.error(err);
+    console.error('duel_error', { category, gender, userId: req.userId, message: err?.message });
     res.status(500).json({ error: 'Error interno.' });
   }
 });

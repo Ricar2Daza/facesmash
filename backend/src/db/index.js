@@ -6,6 +6,10 @@ const db = new sqlite3.Database(DB_PATH);
 export function initDb() {
   return new Promise((resolve, reject) => {
     db.serialize(() => {
+      db.run('PRAGMA foreign_keys = ON');
+      db.run('PRAGMA journal_mode = WAL');
+      db.run('PRAGMA synchronous = NORMAL');
+
       db.run(`
         CREATE TABLE IF NOT EXISTS faces (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -120,7 +124,32 @@ export function initDb() {
           created_at TEXT DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY(admin_id) REFERENCES admins(id)
         )
-      `, (err) => {
+      `);
+
+      db.run(`
+        CREATE TABLE IF NOT EXISTS duel_history (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          category TEXT CHECK(category IN ('AI', 'REAL')) NOT NULL,
+          gender TEXT,
+          face_a_id INTEGER NOT NULL,
+          face_b_id INTEGER NOT NULL,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(user_id) REFERENCES users(id),
+          FOREIGN KEY(face_a_id) REFERENCES faces(id),
+          FOREIGN KEY(face_b_id) REFERENCES faces(id)
+        )
+      `);
+
+      db.run(`CREATE INDEX IF NOT EXISTS idx_faces_public_type_gender ON faces (is_public, type, gender)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_faces_revoked ON faces (consent_revoked_at)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_faces_uploader ON faces (uploader_id)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_users_status ON users (is_active, is_suspended, profile_completed)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_votes_faces ON votes (face_a_id, face_b_id)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_votes_user ON votes (user_id)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_duel_history_user_created ON duel_history (user_id, created_at)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_duel_history_faces ON duel_history (face_a_id, face_b_id)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_votes_created_at ON votes (created_at)`, (err) => {
         if (err) reject(err);
         else resolve();
       });
@@ -155,3 +184,11 @@ export function run(sql, params = []) {
   });
 }
 
+export function closeDb() {
+  return new Promise((resolve, reject) => {
+    db.close((err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+}

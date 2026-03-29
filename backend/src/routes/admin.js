@@ -207,4 +207,32 @@ router.get('/duels', authenticateAdmin, async (req, res) => {
   }
 });
 
+router.post('/reset-duels', authenticateAdmin, async (req, res) => {
+  try {
+    await run("BEGIN IMMEDIATE");
+    try {
+      const votesDeleted = await run("DELETE FROM votes");
+      const historyDeleted = await run("DELETE FROM duel_history");
+      const facesReset = await run(
+        "UPDATE faces SET elo_rating = 1200, wins = 0, losses = 0, matches = 0, updated_at = CURRENT_TIMESTAMP"
+      );
+      await run("COMMIT");
+
+      await logAdminAction(req.adminId, "reset_duels", { votesDeleted, historyDeleted, facesReset }, "WARN");
+      res.json({
+        success: true,
+        votesDeleted: votesDeleted.changes,
+        duelHistoryDeleted: historyDeleted.changes,
+        facesReset: facesReset.changes
+      });
+    } catch (e) {
+      await run("ROLLBACK");
+      throw e;
+    }
+  } catch (err) {
+    console.error("admin_reset_duels_error", { adminId: req.adminId, message: err?.message });
+    res.status(500).json({ error: "Error al resetear duelos" });
+  }
+});
+
 export default router;

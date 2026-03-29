@@ -34,8 +34,6 @@ const guestCtaLoginBtn = document.getElementById("guest-cta-login");
 const realCtaLoginBtn = document.getElementById("real-cta-login");
 const realCtaRegisterBtn = document.getElementById("real-cta-register");
 const duelRankingsList = document.getElementById("duel-rankings-list");
-const challengeList = document.getElementById("challenge-list");
-const openRankingsBtn = document.getElementById("open-rankings");
 
 const uploadForm = document.getElementById("upload-form");
 const uploadTypeSelect = document.getElementById("upload-type");
@@ -104,8 +102,11 @@ const reportResult = document.getElementById("report-result");
 const closeReportButton = document.getElementById("close-report");
 
 let currentMode = "AI";
-let currentGender = "male"; 
+let currentGender = "male";
 let currentDuel = null;
+let duelLoadController = null;
+let isLoadingDuel = false;
+let isSubmittingVote = false;
 let adminToken = localStorage.getItem("adminToken");
 let duelRankingsIntervalId = null;
 
@@ -154,17 +155,10 @@ function checkUserAuth() {
     
     // Show My Photos tab
     myPhotosTabBtn.classList.remove("hidden");
-    if (duelModeRealBtn) {
-      duelModeRealBtn.classList.remove("hidden");
-    }
-    if (duelModeAiBtn && duelModeRealBtn) {
-      duelModeAiBtn.classList.remove("active");
-      duelModeRealBtn.classList.add("active");
-      currentMode = "REAL";
-    }
     updateDuelPanels();
-    loadDuelRankings();
-    loadChallengeList();
+    if (currentMode === "REAL") {
+      loadDuelRankings();
+    }
     if (!duelRankingsIntervalId) {
       duelRankingsIntervalId = setInterval(() => {
         if (userToken && !duelTab.classList.contains("hidden") && currentMode === "REAL") {
@@ -181,9 +175,6 @@ function checkUserAuth() {
 
     // Hide My Photos tab
     myPhotosTabBtn.classList.add("hidden");
-    if (duelModeRealBtn) {
-      duelModeRealBtn.classList.add("hidden");
-    }
     if (duelModeAiBtn) {
       duelModeAiBtn.classList.add("active");
     }
@@ -242,6 +233,10 @@ function hideAllTabs() {
 }
 
 function updateDuelPanels() {
+  if (duelModeRealBtn) {
+    duelModeRealBtn.classList.toggle("disabled", !userToken);
+  }
+
   if (duelAiPanel && duelRealPanel) {
     if (currentMode === "REAL") {
       duelAiPanel.classList.add("hidden");
@@ -279,7 +274,6 @@ document.querySelectorAll(".tab").forEach(tab => {
       updateDuelPanels();
       if (currentMode === "REAL" && userToken) {
         loadDuelRankings();
-        loadChallengeList();
       }
       loadDuel();
     }
@@ -469,11 +463,15 @@ document.querySelectorAll(".mode-btn").forEach(btn => {
     btn.classList.add("active");
     const mode = btn.getAttribute("data-mode");
     if (!isRankings) {
+      if (mode === "REAL" && !userToken) {
+        updateDuelPanels();
+        setMessage(duelMessage, "Inicia sesión para jugar duelos contra jugadores.", true);
+        return;
+      }
       currentMode = mode;
       updateDuelPanels();
       if (currentMode === "REAL" && userToken) {
         loadDuelRankings();
-        loadChallengeList();
       }
       loadDuel();
     } else {
@@ -527,12 +525,6 @@ if (realCtaRegisterBtn) {
     registerView.classList.remove("hidden");
     forgotPasswordView.classList.add("hidden");
     resetPasswordView.classList.add("hidden");
-  });
-}
-
-if (openRankingsBtn) {
-  openRankingsBtn.addEventListener("click", () => {
-    document.querySelector('[data-tab="rankings"]').click();
   });
 }
 
@@ -595,22 +587,40 @@ async function loadDuel() {
   currentDuel = null;
   
   if (currentMode === "REAL" && !userToken) {
+    faceAImg.src = "";
+    faceBImg.src = "";
+    voteABtn.disabled = true;
+    voteBBtn.disabled = true;
     setMessage(duelMessage, "Debes iniciar sesión para participar en duelos de personas registradas.", true);
     return;
   }
   
   const genderParam = currentGender ? `&gender=${currentGender}` : '';
-  console.log(`Cargando duelo: Modo=${currentMode}, Gender=${currentGender}`);
+  if (duelLoadController) {
+    duelLoadController.abort();
+  }
+  duelLoadController = new AbortController();
+  isLoadingDuel = true;
+
+  voteABtn.disabled = true;
+  voteBBtn.disabled = true;
+  skipDuelBtn.disabled = true;
+  faceAImg.style.border = "";
+  faceBImg.style.border = "";
+  faceAImg.alt = "Rostro A";
+  faceBImg.alt = "Rostro B";
   
   try {
     const headers = {};
     if (userToken) {
       headers["Authorization"] = `Bearer ${userToken}`;
     }
-    const res = await fetch(`/api/faces/duel?category=${encodeURIComponent(currentMode)}${genderParam}`, { headers });
+    const res = await fetch(`/api/faces/duel?category=${encodeURIComponent(currentMode)}${genderParam}`, {
+      headers,
+      signal: duelLoadController.signal
+    });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      console.error("Error cargando duelo:", data);
       if (res.status === 401 || res.status === 403) {
         setMessage(duelMessage, data.error || "Debes iniciar sesión para acceder a los duelos.", true);
       } else {
@@ -619,7 +629,6 @@ async function loadDuel() {
       return;
     }
     const data = await res.json();
-    console.log("Datos del duelo recibidos:", data);
     
     if (!data.faces || data.faces.length < 2) {
        setMessage(duelMessage, "No hay suficientes perfiles activos que cumplan los requisitos para mostrar un duelo.", true);
@@ -631,32 +640,32 @@ async function loadDuel() {
     
     const ensurePath = (p) => p.startsWith('/') ? p : '/' + p;
     
-    faceAImg.onload = () => console.log("Face A loaded successfully");
     faceAImg.onerror = (e) => {
-       console.error("Error loading Face A:", a.imagePath);
        faceAImg.alt = "Error loading image";
        faceAImg.style.border = "2px solid red";
     };
     faceAImg.src = ensurePath(a.imagePath) + "?t=" + Date.now();
     
-    faceBImg.onload = () => console.log("Face B loaded successfully");
     faceBImg.onerror = (e) => {
-       console.error("Error loading Face B:", b.imagePath);
        faceBImg.alt = "Error loading image";
        faceBImg.style.border = "2px solid red";
     };
     faceBImg.src = ensurePath(b.imagePath) + "?t=" + Date.now();
-    
-    console.log("Asignando imágenes:", a.imagePath, b.imagePath);
 
   } catch (e) {
-    console.error("Excepción en loadDuel:", e);
-    setMessage(duelMessage, "Error de red al cargar el duelo", true);
+    if (e?.name !== "AbortError") {
+      setMessage(duelMessage, "Error de red al cargar el duelo", true);
+    }
+  } finally {
+    isLoadingDuel = false;
+    voteABtn.disabled = !currentDuel;
+    voteBBtn.disabled = !currentDuel;
+    skipDuelBtn.disabled = false;
   }
 }
 
 async function sendVote(winner) {
-  if (!currentDuel) return;
+  if (!currentDuel || isSubmittingVote || isLoadingDuel) return;
   const body = {
     faceAId: currentDuel.a.id,
     faceBId: currentDuel.b.id
@@ -669,6 +678,10 @@ async function sendVote(winner) {
     body.winnerFaceId = currentDuel.b.id;
   }
   try {
+    isSubmittingVote = true;
+    voteABtn.disabled = true;
+    voteBBtn.disabled = true;
+    skipDuelBtn.disabled = true;
     if (!userToken) {
       setMessage(duelMessage, "Voto no registrado. Inicia sesión para guardar resultados y acceder al ranking.");
       await loadDuel();
@@ -690,11 +703,15 @@ async function sendVote(winner) {
     setMessage(duelMessage, "Preferencia registrada");
     if (userToken && currentMode === "REAL") {
       loadDuelRankings();
-      loadChallengeList();
     }
     await loadDuel();
   } catch (e) {
     setMessage(duelMessage, "Error de red al registrar el voto", true);
+  } finally {
+    isSubmittingVote = false;
+    voteABtn.disabled = !currentDuel;
+    voteBBtn.disabled = !currentDuel;
+    skipDuelBtn.disabled = false;
   }
 }
 
@@ -979,62 +996,6 @@ async function loadDuelRankings() {
   }
 }
 
-async function loadChallengeList() {
-  if (!challengeList) return;
-  if (!userToken) {
-    challengeList.innerHTML = '<li><div class="ranking-meta"><span>Inicia sesión para desafiar a otros jugadores.</span></div></li>';
-    return;
-  }
-  try {
-    const res = await fetch('/api/rankings?category=REAL&limit=5', {
-      headers: { 'Authorization': `Bearer ${userToken}` }
-    });
-    if (!res.ok) {
-      challengeList.innerHTML = '<li><div class="ranking-meta"><span>No se pudo cargar la lista de jugadores.</span></div></li>';
-      return;
-    }
-    const data = await res.json();
-    const faces = data.faces || [];
-    challengeList.innerHTML = '';
-    if (!faces.length) {
-      challengeList.innerHTML = '<li><div class="ranking-meta"><span>No hay jugadores activos para desafiar.</span></div></li>';
-      return;
-    }
-    faces.forEach(face => {
-      const li = document.createElement('li');
-      const thumb = document.createElement('div');
-      thumb.className = 'ranking-thumb';
-      const img = document.createElement('img');
-      img.src = face.imagePath;
-      img.alt = face.displayName || `Rostro ${face.id}`;
-      thumb.appendChild(img);
-      const meta = document.createElement('div');
-      meta.className = 'ranking-meta';
-      const title = document.createElement('span');
-      title.textContent = face.displayName || `Rostro ${face.id}`;
-      const btn = document.createElement('button');
-      btn.className = 'btn small secondary';
-      btn.textContent = 'Jugar duelo';
-      btn.addEventListener('click', () => {
-        currentMode = "REAL";
-        if (duelModeRealBtn && duelModeAiBtn) {
-          duelModeAiBtn.classList.remove("active");
-          duelModeRealBtn.classList.add("active");
-        }
-        document.querySelector('[data-tab="duel"]').click();
-        loadDuel();
-      });
-      meta.appendChild(title);
-      meta.appendChild(btn);
-      li.appendChild(thumb);
-      li.appendChild(meta);
-      challengeList.appendChild(li);
-    });
-  } catch (e) {
-    challengeList.innerHTML = '<li><div class="ranking-meta"><span>Error de conexión.</span></div></li>';
-  }
-}
-
 window.moderateFace = async (faceId, action) => {
   if (!confirm(`¿Confirmar acción: ${action}?`)) return;
   try {
@@ -1303,7 +1264,6 @@ if (resetTokenParam) {
     loadDuel();
     if (userToken) {
       loadDuelRankings();
-      loadChallengeList();
       setInterval(() => {
         if (!duelTab.classList.contains("hidden")) {
           loadDuelRankings();

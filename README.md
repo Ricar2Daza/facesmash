@@ -129,6 +129,38 @@ Variables de entorno (opcional):
 
 Este proyecto guarda datos en disco (SQLite) y archivos subidos (uploads). Por eso, el despliegue recomendado es en un servicio con disco persistente (por ejemplo Render/Railway/Fly.io/VPS).
 
+## 9. Ejecutar con ngrok (compartir URL pública)
+
+Útil para probar desde móvil o compartir una demo temporal sin desplegar.
+
+1. Arranca el backend en local:
+   - Windows (PowerShell):
+     - `cd backend`
+     - `npm install`
+     - `npm start`
+2. Instala ngrok y autentica tu cuenta (solo la primera vez):
+   - `ngrok config add-authtoken TU_TOKEN`
+3. Abre el túnel al puerto del servidor:
+   - `ngrok http 3000`
+4. Abre la URL HTTPS que te da ngrok (por ejemplo `https://xxxx.ngrok-free.app`).
+
+Notas:
+- El servidor está configurado con `trust proxy` para que la IP del cliente se detecte bien detrás de ngrok (evita problemas con rate-limit).
+- Si cambias el puerto con `PORT`, usa ese mismo puerto en `ngrok http <PORT>`.
+
+## 10. Usuarios (listar y resetear contraseña)
+
+Por seguridad, **no es posible recuperar contraseñas existentes**: se almacenan hasheadas en `users.password_hash`.
+
+Comandos útiles:
+
+- Listar usuarios registrados:
+  - `cd backend`
+  - `npm run users:list`
+- Asignar una nueva contraseña a un usuario (para poder iniciar sesión):
+  - `npm run users:set-password -- --username <usuario> --password <nueva_password>`
+  - o `npm run users:set-password -- --email <email> --password <nueva_password>`
+
 ### Render (simple)
 
 1. Crea un **Web Service** desde el repo `Ricar2Daza/facesmash`.
@@ -231,6 +263,40 @@ Lógica principal:
 
 - El frontend envía un voto con `faceAId`, `faceBId` y `winnerFaceId` o marca `isTie`.
 - El backend recupera los dos ratings actuales, ejecuta `updateElo`, actualiza ambos registros y devuelve los nuevos ratings al cliente.
+
+## 7. Arquitectura del sistema de duelos
+
+### Componentes
+
+- Frontend: [index.html](file:///c:/Users/Usuario/Desktop/facesmash/backend/public/index.html) + [app.js](file:///c:/Users/Usuario/Desktop/facesmash/backend/public/app.js)
+  - Modo **Contra IA**: accesible sin sesión para jugar inmediatamente.
+  - Modo **Contra jugadores**: requiere sesión para cargar duelos reales y registrar resultados.
+  - Sin sesión, los votos no se registran (no afecta ELO).
+- Backend:
+  - Matchmaking: [faces.js](file:///c:/Users/Usuario/Desktop/facesmash/backend/src/routes/faces.js) (`GET /api/faces/duel`)
+  - Registro de resultados: [votes.js](file:///c:/Users/Usuario/Desktop/facesmash/backend/src/routes/votes.js) (`POST /api/votes`)
+  - Filtro de visibilidad de usuarios/rostros: [accountFilters.js](file:///c:/Users/Usuario/Desktop/facesmash/backend/src/lib/accountFilters.js)
+
+### Matchmaking (mejoras)
+
+- Evita `ORDER BY RANDOM()` como camino principal para mejorar rendimiento cuando crece la tabla `faces`.
+- Selecciona candidatos usando rango de IDs (`MIN/MAX`) y búsqueda por `id >= target` con fallback.
+- En duelos `REAL`, excluye rostros del propio usuario autenticado para evitar emparejarse consigo mismo.
+
+### Registro y “recompensas”
+
+- `POST /api/votes` requiere sesión válida (JWT).
+- Actualiza de forma atómica (transacción):
+  - Inserta el voto en `votes`.
+  - Actualiza `elo_rating`, `matches`, `wins`, `losses` en ambos rostros.
+- Reutiliza el mismo filtro de visibilidad de rostros que el matchmaking para evitar registrar votos sobre rostros no elegibles.
+
+### Sincronización de red y estabilidad de UI
+
+- Cancela solicitudes anteriores de duelo cuando el usuario cambia de modo/filtros para evitar estados inconsistentes.
+- Bloquea botones mientras se carga un duelo o se envía un voto para evitar doble envío.
+ 
+## 8. API funcional
 
 ## 7. API funcional
 
